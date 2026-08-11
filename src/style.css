@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light dark;
+  --app-bg: light-dark(#eef2f7, #0b0f14);
+  --app-panel: light-dark(#ffffff, #151a21);
+  --app-panel-2: light-dark(#f6f8fb, #1b2129);
+  --app-panel-3: light-dark(#eef2f7, #20262f);
+  --app-text: light-dark(#182230, #e6edf3);
+  --app-muted: light-dark(#667085, #8b98a9);
+  --app-border: light-dark(#e2e8f0, #2c333d);
+  --app-primary: light-dark(#2f6fed, #58a6ff);
+  --app-primary-soft: light-dark(#eaf2ff, #17365c);
+  --app-green: light-dark(#1f9d55, #3fb97a);
+  --app-green-soft: light-dark(#e7f7ee, #123b27);
+  --app-amber: light-dark(#d97706, #e8a33d);
+  --app-amber-soft: light-dark(#fdf1dd, #4a320c);
+  --app-red: light-dark(#dc2626, #f47067);
+  --app-red-soft: light-dark(#fdeaea, #4a1717);
+  --app-blue: light-dark(#2563eb, #58a6ff);
+  --app-blue-soft: light-dark(#eaf2ff, #17365c);
+  --app-purple: light-dark(#7c3aed, #a78bfa);
+  --app-purple-soft: light-dark(#f1eafe, #2a1d4d);
+  --app-teal: light-dark(#0f9f8f, #2dd4bf);
+  --app-teal-soft: light-dark(#e4f6f4, #0e3a36);
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  cursor: pointer;
+}
+
+::selection {
+  background: var(--app-primary-soft);
+  color: var(--app-primary);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--app-muted) 35%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.theme-surface {
+  background: var(--app-panel);
+  border: 1px solid var(--app-border);
+}
+
+.theme-surface-2 {
+  background: var(--app-panel-2);
+  border: 1px solid var(--app-border);
+}
+
+.theme-text-muted {
+  color: var(--app-muted);
+}
+
+.theme-input {
+  width: 100%;
+  padding: 8px 11px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-panel-2);
+  color: var(--app-text);
+  outline: none;
+  font-size: 13px;
+}
+
+.theme-input:focus {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 3px var(--app-primary-soft);
+}
+
+.theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-panel);
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.12s ease;
+}
+
+.theme-btn:hover {
+  background: var(--app-panel-2);
+}
+
+.theme-btn-primary {
+  border-color: var(--app-primary);
+  background: var(--app-primary);
+  color: #fff;
+}
+
+.theme-btn-primary:hover {
+  background: var(--app-primary);
+  filter: brightness(1.06);
+}
+
+.theme-btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.theme-btn-ghost:hover {
+  background: var(--app-panel-2);
+}
+
+.task-color-red {
+  --task-color: var(--app-red);
+  --task-soft: var(--app-red-soft);
+}
+
+.task-color-amber {
+  --task-color: var(--app-amber);
+  --task-soft: var(--app-amber-soft);
+}
+
+.task-color-green {
+  --task-color: var(--app-green);
+  --task-soft: var(--app-green-soft);
+}
+
+.task-color-blue {
+  --task-color: var(--app-blue);
+  --task-soft: var(--app-blue-soft);
+}
+
+.task-color-purple {
+  --task-color: var(--app-purple);
+  --task-soft: var(--app-purple-soft);
+}
+
+.task-color-teal {
+  --task-color: var(--app-teal);
+  --task-soft: var(--app-teal-soft);
+}
