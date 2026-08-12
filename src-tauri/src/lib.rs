@@ -6,6 +6,14 @@ use tauri::{
 
 pub fn run() {
   tauri::Builder::default()
+    // 单实例：重复启动时退出新进程，并把焦点还给已运行实例的主窗口
+    .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+      if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+      }
+    }))
     .plugin(tauri_plugin_sql::Builder::default().build())
     .plugin(tauri_plugin_notification::init())
     .on_window_event(|window, event| {
