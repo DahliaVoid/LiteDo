@@ -6,6 +6,7 @@ import type { Task } from "../lib/types";
 import * as db from "../lib/db";
 import { formatShort, today } from "../lib/format";
 import {
+  confirmDialog,
   currentProject,
   openProjectModal,
   openTaskModal,
@@ -34,7 +35,7 @@ async function onToggle(task: Task) {
 }
 
 async function onDelete(task: Task) {
-  if (!confirm(`确定删除“${task.title}”？`)) return;
+  if (!(await confirmDialog({ title: "删除任务", message: `确定删除“${task.title}”？`, confirmText: "删除" }))) return;
   await db.deleteTask(task.id);
   await refresh();
 }

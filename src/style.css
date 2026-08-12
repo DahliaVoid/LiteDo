@@ -130,6 +130,17 @@ button {
   filter: brightness(1.06);
 }
 
+.theme-btn-danger {
+  border-color: var(--app-red);
+  background: var(--app-red);
+  color: #fff;
+}
+
+.theme-btn-danger:hover {
+  background: var(--app-red);
+  filter: brightness(1.06);
+}
+
 .theme-btn-ghost {
   border-color: transparent;
   background: transparent;

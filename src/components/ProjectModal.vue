@@ -3,7 +3,7 @@ import { reactive, watch } from "vue";
 import { Trash2, X } from "@lucide/vue";
 import type { Color, Priority, ProjectInput } from "../lib/types";
 import * as db from "../lib/db";
-import { closeModals, refresh, store } from "../lib/store";
+import { closeModals, confirmDialog, refresh, store } from "../lib/store";
 import { addDays, today } from "../lib/format";
 
 const colors: Color[] = ["red", "amber", "green", "blue", "purple", "teal"];
@@ -56,7 +56,7 @@ async function save() {
 
 async function remove() {
   if (!store.editingProject) return;
-  if (!confirm("确定删除该项目？项目下的任务会一起删除。")) return;
+  if (!(await confirmDialog({ title: "删除项目", message: `确定删除项目“${store.editingProject.name}”？项目下的任务会一起删除。`, confirmText: "删除" }))) return;
   await db.deleteProject(store.editingProject.id);
   closeModals();
   store.selectedProjectId = null;

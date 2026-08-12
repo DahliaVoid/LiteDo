@@ -5,7 +5,7 @@ import ContextMenu from "../components/ContextMenu.vue";
 import type { ProjectWithCount } from "../lib/types";
 import { dateInRange, formatShort, today } from "../lib/format";
 import * as db from "../lib/db";
-import { openProject, openProjectModal, refresh, store, tasksOnDate } from "../lib/store";
+import { openProject, openProjectModal, confirmDialog, refresh, store, tasksOnDate } from "../lib/store";
 
 const todayValue = today();
 
@@ -51,7 +51,7 @@ function onMenuEdit(project: ProjectWithCount) {
 
 async function onMenuArchive(project: ProjectWithCount) {
   contextMenu.value = null;
-  if (!confirm(`归档项目“${project.name}”？项目下的任务会一并归档。`)) return;
+  if (!(await confirmDialog({ title: "归档项目", message: `归档项目“${project.name}”？项目下的任务会一并归档，可随时在归档页恢复。`, confirmText: "归档" }))) return;
   await db.archiveProject(project.id);
   await refresh();
 }

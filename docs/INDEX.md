@@ -29,7 +29,8 @@
 │       ├── ProjectModal.vue    # 新建/编辑项目弹窗
 │       ├── TaskModal.vue       # 新建/编辑任务弹窗（时间点、提醒、重复）
 │       ├── TaskItem.vue        # 单条任务卡片（勾选/编辑/删除）
-│       ├── ContextMenu.vue     # 通用右键菜单（挂载时按可视范围钳制位置，slot 放菜单项）
+│       ├── ContextMenu.vue     # 通用右键菜单（跟随鼠标、按可视范围钳制位置，slot 放菜单项）
+│       ├── ConfirmDialog.vue   # 主题化确认弹窗（替代原生 confirm，居中显示）
 │       └── ReminderPopup.vue   # 应用内提醒弹窗（右下角）
 ├── src-tauri/
 │   ├── tauri.conf.json         # 窗口/打包配置
@@ -101,11 +102,12 @@
 - `refresh()`：重新拉取 projects + archivedProjects + tasks（所有变更后调用）。
 - 派生查询：`currentProject()`、`projectTasks()`、`todayTempTasks()`（todo_date=今天且未归档）、`todayProjectTasks()`（未完成且日期覆盖今天）、`tasksOnDate()`。
 - 操作：`toggleTask()`（**重复任务勾选完成 = 直接顺延到下一周期、done 保持 0**，不重复任务走 setTaskDone）、`openProject()`、`openProjectModal()`、`openTaskModal()`、`closeModals()`。
+- 确认弹窗：`confirmDialog(options)` 返回 Promise<boolean>，写入 `store.confirm` 由 ConfirmDialog.vue 渲染；已全面替代原生 `confirm`。
 - 弹窗模式：`editingProject/editingTask` 非空 = 编辑态；`taskModalProjectId` 预选所属项目；`taskModalDate` 日历页新建时预填日期。
 
 ### src/views/CalendarView.vue —— 月历 + 甘特图（本文件最复杂）
 
-- `month/year/selected` ref 控制当前月与选中日期；`selectedTasks` 右侧当天待办列表（**右键弹出“编辑任务”菜单**，空白区域右键关闭菜单）。
+- `month/year/selected` ref 控制当前月与选中日期；`selectedTasks` 右侧当天待办列表（**右键弹出菜单：编辑任务 / 删除任务**，空白区域右键关闭菜单）。
 - **甘特图布局**：外层 grid `150px repeat(N, minmax(22px,1fr))`，`N = ganttDays`（当月天数）。列宽 `1fr` 会随窗口拉伸，因此**“今天”分割线不能用按 minWidth 推算的 left 像素值定位**（缩放后偏移的 bug 根源），而是作为 grid 子元素用 `gridColumn: offset+2 / offset+3` + `gridRow: 1 / -1` 定位，天然对齐任何宽度。
 - 行：`ganttLanes` 每个项目一行 + 每任务一行（**已完成任务不显示**）；`barStyle()` 用 `gridColumn: start+2 / end+2` 画条。
 - 表头：当天日期格替换为“今天”字样并高亮（`--app-primary` 底白字）；分割线 `justifySelf: start` 左对齐“今天”格子左边界。
@@ -122,8 +124,15 @@
 ### src/components/ContextMenu.vue —— 通用右键菜单
 
 - 通用弹层：props 接收 `x/y` 坐标与可选 `header`（超长截断），菜单项由 **slot** 传入。
-- 挂载后按菜单实际尺寸钳制到窗口可视范围内；点击外部 / Escape / 窗口失焦自动 `close`。
-- 项目页（编辑项目/归档）、日历页待办（编辑任务）均复用此组件。
+- 挂载后按菜单实际尺寸钳制到窗口可视范围内；**watch x/y 变化重新定位**（菜单已打开时再次右键其他位置，跟随鼠标而不是卡在第一次右键处）。
+- 点击外部 / Escape / 窗口失焦自动 `close`。
+- 项目页（编辑项目/归档）、日历页待办（编辑任务/删除任务）均复用此组件。
+
+### src/components/ConfirmDialog.vue —— 主题化确认弹窗
+
+- 替代原生 `confirm`：居中显示、UI 跟随主题（`theme-surface` + `theme-btn`），不会出现 "tauri.localhost 显示" 的原生提示。
+- 状态存于 `store.confirm`；`danger` 确认按钮用红色 `theme-btn-danger`。
+- 使用方式：`await confirmDialog({ title, message, confirmText, cancelText?, danger? })` 返回 `boolean`；点击遮罩 = 取消。
 
 ### src/views/ArchiveView.vue —— 归档页
 

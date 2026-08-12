@@ -3,7 +3,7 @@ import { computed, reactive, watch } from "vue";
 import { Repeat2, Trash2, X } from "@lucide/vue";
 import type { Color, Priority, Repeat, TaskInput } from "../lib/types";
 import * as db from "../lib/db";
-import { closeModals, refresh, store } from "../lib/store";
+import { closeModals, confirmDialog, refresh, store } from "../lib/store";
 import { today } from "../lib/format";
 
 const colors: Color[] = ["red", "amber", "green", "blue", "purple", "teal"];
@@ -112,7 +112,7 @@ async function save() {
 
 async function remove() {
   if (!store.editingTask) return;
-  if (!confirm("确定删除该任务？")) return;
+  if (!(await confirmDialog({ title: "删除任务", message: `确定删除“${store.editingTask.title}”？`, confirmText: "删除" }))) return;
   await db.deleteTask(store.editingTask.id);
   closeModals();
   await refresh();

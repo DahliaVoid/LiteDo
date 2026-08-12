@@ -3,6 +3,15 @@ import type { ProjectWithCount, Task } from "./types";
 import * as db from "./db";
 import { advanceRepeat, dateInRange, sortPriority, today } from "./format";
 
+export interface ConfirmState {
+  title: string;
+  message: string;
+  confirmText: string;
+  cancelText: string;
+  danger: boolean;
+  resolve: (ok: boolean) => void;
+}
+
 export const store = reactive({
   view: "today" as "today" | "calendar" | "projects" | "project-detail" | "archive" | "placeholder",
   projects: [] as ProjectWithCount[],
@@ -18,7 +27,30 @@ export const store = reactive({
   taskModalProjectId: null as number | null,
   reminders: [] as Task[],
   snoozedUntil: "",
+  confirm: null as ConfirmState | null,
 });
+
+export interface ConfirmOptions {
+  title?: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  danger?: boolean;
+}
+
+/** 主题化确认弹窗（替代原生 confirm，居中显示） */
+export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
+  return new Promise((resolve) => {
+    store.confirm = {
+      title: options.title ?? "确认",
+      message: options.message,
+      confirmText: options.confirmText ?? "确定",
+      cancelText: options.cancelText ?? "取消",
+      danger: options.danger ?? true,
+      resolve,
+    };
+  });
+}
 
 export async function refresh() {
   store.projects = await db.listProjects();

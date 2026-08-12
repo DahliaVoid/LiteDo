@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { Bell, CalendarRange, ChevronLeft, ChevronRight, Pencil, Plus } from "@lucide/vue";
+import { Bell, CalendarRange, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "@lucide/vue";
 import ContextMenu from "../components/ContextMenu.vue";
 import type { Task } from "../lib/types";
 import { addDays, diffDays, formatDate, formatShort, monthDays, pad, today, weekdayCN } from "../lib/format";
 import * as db from "../lib/db";
-import { openTaskModal, refresh, store, tasksOnDate, toggleTask } from "../lib/store";
+import { confirmDialog, openTaskModal, refresh, store, tasksOnDate, toggleTask } from "../lib/store";
 
 interface GanttLane {
   id: string;
@@ -130,6 +130,13 @@ function onMenuEdit(task: Task) {
   openTaskModal(task.project_id, task);
 }
 
+async function onMenuDelete(task: Task) {
+  taskMenu.value = null;
+  if (!(await confirmDialog({ title: "删除任务", message: `确定删除“${task.title}”？`, confirmText: "删除" }))) return;
+  await db.deleteTask(task.id);
+  await refresh();
+}
+
 // 右键空白区域关闭菜单（原生菜单已由 App.vue 全局禁用）
 function onDocContextMenu(event: MouseEvent) {
   if ((event.target as HTMLElement).closest(".calendar-task-item")) return;
@@ -247,6 +254,14 @@ async function onToggle(task: Task) {
         @click="onMenuEdit(taskMenu.task)"
       >
         <Pencil :size="14" class="flex-none text-[var(--app-muted)]" /> 编辑任务
+      </button>
+      <div class="mx-1 my-1 border-t border-[var(--app-border)]"></div>
+      <button
+        type="button"
+        class="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-[var(--app-red)] transition hover:bg-[var(--app-red-soft)]"
+        @click="onMenuDelete(taskMenu.task)"
+      >
+        <Trash2 :size="14" class="flex-none" /> 删除任务
       </button>
     </ContextMenu>
 

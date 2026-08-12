@@ -22,6 +22,7 @@ import ArchiveView from "./views/ArchiveView.vue";
 import ProjectModal from "./components/ProjectModal.vue";
 import TaskModal from "./components/TaskModal.vue";
 import ReminderPopup from "./components/ReminderPopup.vue";
+import ConfirmDialog from "./components/ConfirmDialog.vue";
 import type { Task } from "./lib/types";
 import { dateInRange, reminderAt, today } from "./lib/format";
 import { openProjectModal, openTaskModal, refresh, store } from "./lib/store";
@@ -232,5 +233,6 @@ onUnmounted(() => {
     <ProjectModal />
     <TaskModal />
     <ReminderPopup />
+    <ConfirmDialog />
   </div>
 </template>
