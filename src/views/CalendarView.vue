@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { Bell, CalendarRange, ChevronLeft, ChevronRight, Plus } from "@lucide/vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { Bell, CalendarRange, ChevronLeft, ChevronRight, Pencil, Plus } from "@lucide/vue";
+import ContextMenu from "../components/ContextMenu.vue";
 import type { Task } from "../lib/types";
 import { addDays, diffDays, formatDate, formatShort, monthDays, pad, today, weekdayCN } from "../lib/format";
 import * as db from "../lib/db";
@@ -49,7 +50,7 @@ const ganttLanes = computed<GanttLane[]>(() => {
       start: project.start_date,
       end: project.end_date,
     });
-    for (const task of store.tasks.filter((t) => t.project_id === project.id && !t.archived)) {
+    for (const task of store.tasks.filter((t) => t.project_id === project.id && !t.archived && !t.done)) {
       lanes.push({
         id: `task-${task.id}`,
         type: "task",
@@ -116,6 +117,27 @@ function openTaskForDate() {
   store.taskModalDate = selected.value;
   openTaskModal();
 }
+
+// 右侧待办列表：右键弹出“编辑任务”菜单，而非直接编辑
+const taskMenu = ref<{ task: Task; x: number; y: number } | null>(null);
+
+function openTaskMenu(task: Task, event: MouseEvent) {
+  taskMenu.value = { task, x: event.clientX, y: event.clientY };
+}
+
+function onMenuEdit(task: Task) {
+  taskMenu.value = null;
+  openTaskModal(task.project_id, task);
+}
+
+// 右键空白区域关闭菜单（原生菜单已由 App.vue 全局禁用）
+function onDocContextMenu(event: MouseEvent) {
+  if ((event.target as HTMLElement).closest(".calendar-task-item")) return;
+  taskMenu.value = null;
+}
+
+onMounted(() => document.addEventListener("contextmenu", onDocContextMenu, true));
+onBeforeUnmount(() => document.removeEventListener("contextmenu", onDocContextMenu, true));
 
 async function onToggle(task: Task) {
   await toggleTask(task);
@@ -191,9 +213,10 @@ async function onToggle(task: Task) {
           <li
             v-for="task in selectedTasks"
             :key="task.id"
-            class="flex items-center gap-2 rounded-lg border-l-[3px] bg-[var(--app-panel-2)] px-2.5 py-2 text-[13px]"
+            class="calendar-task-item flex items-center gap-2 rounded-lg border-l-[3px] bg-[var(--app-panel-2)] px-2.5 py-2 text-[13px] transition hover:bg-[var(--app-panel-3)]"
             :class="`task-color-${task.color}`"
             :style="{ borderLeftColor: 'var(--task-color)' }"
+            @contextmenu.prevent="openTaskMenu(task, $event)"
           >
             <label class="relative flex h-4 w-4 flex-none cursor-pointer items-center">
               <input type="checkbox" class="peer sr-only" :checked="Boolean(task.done)" @change="onToggle(task)" />
@@ -211,6 +234,22 @@ async function onToggle(task: Task) {
       </div>
     </div>
 
+    <ContextMenu
+      v-if="taskMenu"
+      :x="taskMenu.x"
+      :y="taskMenu.y"
+      :header="taskMenu.task.title"
+      @close="taskMenu = null"
+    >
+      <button
+        type="button"
+        class="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-[var(--app-text)] transition hover:bg-[var(--app-panel-2)]"
+        @click="onMenuEdit(taskMenu.task)"
+      >
+        <Pencil :size="14" class="flex-none text-[var(--app-muted)]" /> 编辑任务
+      </button>
+    </ContextMenu>
+
     <div class="theme-surface mt-4 rounded-2xl p-4">
       <div class="mb-3 flex items-center justify-between">
         <h2 class="flex items-center gap-1.5 text-[15px] font-medium">
@@ -224,8 +263,13 @@ async function onToggle(task: Task) {
           <div class="relative grid overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-panel)]" :style="{ gridTemplateColumns: ganttColumns }">
             <div class="border-b border-r border-[var(--app-border)] bg-[var(--app-panel-2)] px-2.5 py-2 text-xs">项目 / 任务</div>
             <div class="grid border-b border-[var(--app-border)]" :style="{ gridTemplateColumns: laneColumns, gridColumn: '2 / -1' }">
-              <span v-for="date in headerDays" :key="date" class="border-l border-[var(--app-border)] px-1 py-2 text-center text-[11px] text-[var(--app-muted)]">
-                {{ dayNumber(date) }}
+              <span
+                v-for="date in headerDays"
+                :key="date"
+                class="border-l border-[var(--app-border)] px-1 py-2 text-center text-[11px]"
+                :class="date === todayValue ? 'bg-[var(--app-primary)] font-medium text-white' : 'text-[var(--app-muted)]'"
+              >
+                {{ date === todayValue ? "今天" : dayNumber(date) }}
               </span>
             </div>
 
@@ -248,10 +292,8 @@ async function onToggle(task: Task) {
             <div
               v-if="todayColumn !== null"
               class="pointer-events-none absolute top-0 bottom-0 z-10 w-0.5 bg-[var(--app-primary)]"
-              :style="{ gridColumn: `${todayColumn} / ${todayColumn + 1}`, gridRow: `1 / ${ganttRowEnd}`, justifySelf: 'center' }"
-            >
-              <span class="absolute top-0 left-1 rounded bg-[var(--app-panel)] px-1 text-[10px] text-[var(--app-primary)]">今天</span>
-            </div>
+              :style="{ gridColumn: `${todayColumn} / ${todayColumn + 1}`, gridRow: `1 / ${ganttRowEnd}`, justifySelf: 'start' }"
+            ></div>
           </div>
         </div>
       </div>

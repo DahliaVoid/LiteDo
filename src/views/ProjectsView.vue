@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { CalendarRange, Plus } from "@lucide/vue";
-import ProjectContextMenu from "../components/ProjectContextMenu.vue";
+import { Archive, CalendarRange, Pencil, Plus } from "@lucide/vue";
+import ContextMenu from "../components/ContextMenu.vue";
 import type { ProjectWithCount } from "../lib/types";
 import { dateInRange, formatShort, today } from "../lib/format";
 import * as db from "../lib/db";
@@ -133,14 +133,27 @@ async function onMenuArchive(project: ProjectWithCount) {
       还没有项目，点击右上角“新建项目”开始。
     </div>
 
-    <ProjectContextMenu
+    <ContextMenu
       v-if="contextMenu"
-      :project="contextMenu.project"
       :x="contextMenu.x"
       :y="contextMenu.y"
-      @edit="onMenuEdit"
-      @archive="onMenuArchive"
+      :header="contextMenu.project.name"
       @close="contextMenu = null"
-    />
+    >
+      <button
+        type="button"
+        class="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-[var(--app-text)] transition hover:bg-[var(--app-panel-2)]"
+        @click="onMenuEdit(contextMenu.project)"
+      >
+        <Pencil :size="14" class="flex-none text-[var(--app-muted)]" /> 编辑项目
+      </button>
+      <button
+        type="button"
+        class="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-[var(--app-text)] transition hover:bg-[var(--app-panel-2)]"
+        @click="onMenuArchive(contextMenu.project)"
+      >
+        <Archive :size="14" class="flex-none text-[var(--app-muted)]" /> 归档
+      </button>
+    </ContextMenu>
   </div>
 </template>

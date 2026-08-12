@@ -29,6 +29,7 @@
 │       ├── ProjectModal.vue    # 新建/编辑项目弹窗
 │       ├── TaskModal.vue       # 新建/编辑任务弹窗（时间点、提醒、重复）
 │       ├── TaskItem.vue        # 单条任务卡片（勾选/编辑/删除）
+│       ├── ContextMenu.vue     # 通用右键菜单（挂载时按可视范围钳制位置，slot 放菜单项）
 │       └── ReminderPopup.vue   # 应用内提醒弹窗（右下角）
 ├── src-tauri/
 │   ├── tauri.conf.json         # 窗口/打包配置
@@ -104,9 +105,10 @@
 
 ### src/views/CalendarView.vue —— 月历 + 甘特图（本文件最复杂）
 
-- `month/year/selected` ref 控制当前月与选中日期；`selectedTasks` 右侧当天待办列表。
+- `month/year/selected` ref 控制当前月与选中日期；`selectedTasks` 右侧当天待办列表（**右键弹出“编辑任务”菜单**，空白区域右键关闭菜单）。
 - **甘特图布局**：外层 grid `150px repeat(N, minmax(22px,1fr))`，`N = ganttDays`（当月天数）。列宽 `1fr` 会随窗口拉伸，因此**“今天”分割线不能用按 minWidth 推算的 left 像素值定位**（缩放后偏移的 bug 根源），而是作为 grid 子元素用 `gridColumn: offset+2 / offset+3` + `gridRow: 1 / -1` 定位，天然对齐任何宽度。
-- 行：`ganttLanes` 每个项目一行 + 每任务一行；`barStyle()` 用 `gridColumn: start+2 / end+2` 画条。
+- 行：`ganttLanes` 每个项目一行 + 每任务一行（**已完成任务不显示**）；`barStyle()` 用 `gridColumn: start+2 / end+2` 画条。
+- 表头：当天日期格替换为“今天”字样并高亮（`--app-primary` 底白字）；分割线 `justifySelf: start` 左对齐“今天”格子左边界。
 - `moveMonth/selectDate` 切换月份/选中日期；`openTaskForDate` 在选中日新建任务。
 
 ### src/views/ProjectsView.vue —— 项目列表
@@ -116,6 +118,12 @@
 - 状态徽标派生：全部任务完成 → 已完成；日期覆盖今天 → 进行中；否则未开始。
 - 进度条：done_count / task_count。
 - **右键关闭逻辑**：组件挂载时在 document 上注册**捕获阶段**的 `contextmenu` 监听——目标是卡片则不动（卡片自身 handler 打开菜单），是其他区域则关闭菜单。必须用捕获阶段，否则会在卡片 handler 之后触发导致“刚打开就关闭”。原生右键菜单已由 App.vue 全局禁用。
+
+### src/components/ContextMenu.vue —— 通用右键菜单
+
+- 通用弹层：props 接收 `x/y` 坐标与可选 `header`（超长截断），菜单项由 **slot** 传入。
+- 挂载后按菜单实际尺寸钳制到窗口可视范围内；点击外部 / Escape / 窗口失焦自动 `close`。
+- 项目页（编辑项目/归档）、日历页待办（编辑任务）均复用此组件。
 
 ### src/views/ArchiveView.vue —— 归档页
 
