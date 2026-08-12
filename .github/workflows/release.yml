@@ -1,0 +1,61 @@
+# 推送 v* 版本 tag 时，自动在 Windows 上构建 NSIS 安装包并创建 GitHub Release。
+# Release 只包含安装包（tauri.conf.json 的 targets 仅为 nsis），不包含免安装 exe。
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            src-tauri/target/release
+            src-tauri/target/package
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # 执行 beforeBuildCommand（npm run build）→ Rust release 编译 → NSIS 打包，
+      # 并将 bundle 产物上传到 tag 对应的 GitHub Release（草稿）。
+      - name: Build release & upload assets
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: LiteDo ${{ github.ref_name }}
+          releaseDraft: true
+          releaseBody: |
+            ## LiteDo ${{ github.ref_name }}
+
+            Windows 安装包（NSIS），由 GitHub Actions 自动构建。
+
+            - 安装包：`LiteDo_*_x64-setup.exe`
+            - 首次运行如出现 SmartScreen 提示，点“更多信息 → 仍要运行”即可
+            - 数据保存在本地 SQLite（%APPDATA%\com.litedo.desktop），无需联网
