@@ -1,12 +1,12 @@
 import { reactive } from "vue";
 import type { ProjectWithCount, Task } from "./types";
 import * as db from "./db";
-import { dateInRange, sortPriority, today } from "./format";
+import { advanceRepeat, dateInRange, sortPriority, today } from "./format";
 
 export const store = reactive({
-  view: "today" as "today" | "calendar" | "projects" | "project-detail" | "placeholder",
-  placeholderTitle: "归档",
+  view: "today" as "today" | "calendar" | "projects" | "project-detail" | "archive" | "placeholder",
   projects: [] as ProjectWithCount[],
+  archivedProjects: [] as ProjectWithCount[],
   tasks: [] as Task[],
   selectedProjectId: null as number | null,
   selectedDate: today(),
@@ -22,6 +22,7 @@ export const store = reactive({
 
 export async function refresh() {
   store.projects = await db.listProjects();
+  store.archivedProjects = await db.listArchivedProjects();
   store.tasks = await db.listTasks();
 }
 
@@ -54,6 +55,25 @@ export function tasksOnDate(date: string): Task[] {
 }
 
 export async function toggleTask(task: Task) {
+  // 重复任务：勾选完成 = 顺延到下一周期，状态保持未完成（不写入 done=1）
+  if (!task.done && task.repeat) {
+    let start = advanceRepeat(task.start_date, task.repeat);
+    let end = advanceRepeat(task.end_date, task.repeat);
+    let todoDate = task.todo_date ? advanceRepeat(task.todo_date, task.repeat) : null;
+    // 若下一周期仍落在过去，连续推进到覆盖今天
+    while (start < today()) {
+      start = advanceRepeat(start, task.repeat);
+      end = advanceRepeat(end, task.repeat);
+      todoDate = todoDate ? advanceRepeat(todoDate, task.repeat) : null;
+    }
+    await db.setTaskDates(task.id, start, end, todoDate);
+    task.start_date = start;
+    task.end_date = end;
+    task.todo_date = todoDate;
+    task.last_reminded_date = null;
+    return;
+  }
+
   const next = task.done ? 0 : 1;
   await db.setTaskDone(task.id, next);
   task.done = next;

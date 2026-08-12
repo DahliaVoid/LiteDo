@@ -63,11 +63,14 @@ const ganttLanes = computed<GanttLane[]>(() => {
   return lanes;
 });
 
-const todayLineLeft = computed<number | null>(() => {
+// “今天”线用网格列号定位（第 1 列是 150px 标签列），而非按最小宽度推算像素，
+// 这样窗口缩放导致 1fr 列拉伸时，线始终与对应日期列边界对齐。
+const todayColumn = computed<number | null>(() => {
   const offset = diffDays(monthStart.value, todayValue);
   if (offset < 0 || offset >= ganttDays.value) return null;
-  return 150 + (offset / ganttDays.value) * (ganttWidth.value - 150);
+  return offset + 2;
 });
+const ganttRowEnd = computed(() => 2 + ganttLanes.value.length * 2);
 
 function moveMonth(delta: number) {
   const date = new Date(year.value, month.value + delta, 1);
@@ -218,7 +221,7 @@ async function onToggle(task: Task) {
 
       <div class="overflow-x-auto">
         <div class="relative" :style="{ minWidth: ganttWidth + 'px' }">
-          <div class="grid overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-panel)]" :style="{ gridTemplateColumns: ganttColumns }">
+          <div class="relative grid overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-panel)]" :style="{ gridTemplateColumns: ganttColumns }">
             <div class="border-b border-r border-[var(--app-border)] bg-[var(--app-panel-2)] px-2.5 py-2 text-xs">项目 / 任务</div>
             <div class="grid border-b border-[var(--app-border)]" :style="{ gridTemplateColumns: laneColumns, gridColumn: '2 / -1' }">
               <span v-for="date in headerDays" :key="date" class="border-l border-[var(--app-border)] px-1 py-2 text-center text-[11px] text-[var(--app-muted)]">
@@ -241,14 +244,14 @@ async function onToggle(task: Task) {
                 </div>
               </div>
             </template>
-          </div>
 
-          <div
-            v-if="todayLineLeft !== null"
-            class="pointer-events-none absolute top-0 bottom-0 w-0.5 bg-[var(--app-primary)]"
-            :style="{ left: todayLineLeft + 'px' }"
-          >
-            <span class="absolute top-0 left-1 rounded bg-[var(--app-panel)] px-1 text-[10px] text-[var(--app-primary)]">今天</span>
+            <div
+              v-if="todayColumn !== null"
+              class="pointer-events-none absolute top-0 bottom-0 z-10 w-0.5 bg-[var(--app-primary)]"
+              :style="{ gridColumn: `${todayColumn} / ${todayColumn + 1}`, gridRow: `1 / ${ganttRowEnd}`, justifySelf: 'center' }"
+            >
+              <span class="absolute top-0 left-1 rounded bg-[var(--app-panel)] px-1 text-[10px] text-[var(--app-primary)]">今天</span>
+            </div>
           </div>
         </div>
       </div>

@@ -1,3 +1,5 @@
+import type { Repeat } from "./types";
+
 export function pad(n: number): string {
   return n < 10 ? `0${n}` : String(n);
 }
@@ -19,6 +21,24 @@ export function addDays(value: string, days: number): string {
   const date = parseDate(value);
   date.setDate(date.getDate() + days);
   return toDateStr(date);
+}
+
+export function addMonths(value: string, months: number): string {
+  const date = parseDate(value);
+  const day = date.getDate();
+  date.setDate(1);
+  date.setMonth(date.getMonth() + months);
+  // 目标月没有当天日号时（如 1/31 +1 月），钳制到该月最后一天
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(day, lastDay));
+  return toDateStr(date);
+}
+
+export function advanceRepeat(value: string, repeat: Repeat): string {
+  if (repeat === "daily") return addDays(value, 1);
+  if (repeat === "weekly") return addDays(value, 7);
+  if (repeat === "monthly") return addMonths(value, 1);
+  return value;
 }
 
 export function formatDate(value: string): string {

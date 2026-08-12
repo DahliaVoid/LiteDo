@@ -20,6 +20,14 @@ const tasks = computed(() => (project.value ? projectTasks(project.value.id) : [
 const doneCount = computed(() => tasks.value.filter((t) => t.done).length);
 const percent = computed(() => (tasks.value.length ? Math.round((doneCount.value / tasks.value.length) * 100) : 0));
 
+// 状态派生：全部任务完成 → 已完成；日期覆盖今天 → 进行中；否则未开始
+const statusLabel = computed(() => {
+  if (!project.value) return "";
+  if (project.value.task_count > 0 && project.value.done_count === project.value.task_count) return "已完成";
+  if (today() >= project.value.start_date && today() <= project.value.end_date) return "进行中";
+  return "未开始";
+});
+
 async function onToggle(task: Task) {
   await toggleTask(task);
   await refresh();
@@ -48,11 +56,12 @@ async function onDelete(task: Task) {
         <span
           class="rounded-full px-2 py-0.5 text-[11px]"
           :class="{
-            'bg-[var(--app-blue-soft)] text-[var(--app-blue)]': today() >= project.start_date && today() <= project.end_date,
-            'bg-[var(--app-panel-3)] text-[var(--app-muted)]': today() < project.start_date,
+            'bg-[var(--app-blue-soft)] text-[var(--app-blue)]': statusLabel === '进行中',
+            'bg-[var(--app-panel-3)] text-[var(--app-muted)]': statusLabel === '未开始',
+            'bg-[var(--app-green-soft)] text-[var(--app-green)]': statusLabel === '已完成',
           }"
         >
-          {{ today() >= project.start_date && today() <= project.end_date ? "进行中" : "未开始" }}
+          {{ statusLabel }}
         </span>
       </div>
       <button

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Bell, Pencil, Trash2 } from "@lucide/vue";
+import { Bell, Pencil, Repeat2, Trash2 } from "@lucide/vue";
 import type { Task } from "../lib/types";
 import { formatShort } from "../lib/format";
 
@@ -16,6 +16,12 @@ const emit = defineEmits<{
 }>();
 
 const done = computed(() => Boolean(props.task.done));
+const repeatLabel = computed(() => {
+  if (props.task.repeat === "daily") return "每天";
+  if (props.task.repeat === "weekly") return "每周";
+  if (props.task.repeat === "monthly") return "每月";
+  return "";
+});
 </script>
 
 <template>
@@ -62,8 +68,11 @@ const done = computed(() => Boolean(props.task.done));
         <span v-if="task.has_time && task.reminder" class="inline-flex items-center gap-1 text-[var(--app-primary)]">
           <Bell :size="12" /> 提醒
         </span>
-        <span v-if="task.start_date !== task.end_date">
-          {{ formatShort(task.start_date) }} – {{ formatShort(task.end_date) }}
+        <span v-if="repeatLabel" class="inline-flex items-center gap-1 text-[var(--app-primary)]">
+          <Repeat2 :size="12" /> {{ repeatLabel }}
+        </span>
+        <span v-if="task.is_temp || task.start_date !== task.end_date">
+          {{ formatShort(task.start_date) }}{{ task.start_date !== task.end_date ? " – " + formatShort(task.end_date) : "" }}
         </span>
         <span
           v-if="showProject && task.project_name"

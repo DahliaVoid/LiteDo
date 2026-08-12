@@ -39,15 +39,26 @@ async function getDb(): Promise<Database> {
           is_temp INTEGER NOT NULL DEFAULT 0,
           todo_date TEXT,
           last_reminded_date TEXT,
+          repeat TEXT NOT NULL DEFAULT '',
           archived INTEGER NOT NULL DEFAULT 0,
           created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         )
       `);
+      await migrate(db);
       await seed(db);
       return db;
     })();
   }
   return dbPromise;
+}
+
+/** 为旧版本数据库补充新增列（幂等：只加缺失列） */
+async function migrate(db: Database) {
+  const columns = await db.select<Array<{ name: string }>>("PRAGMA table_info(tasks)");
+  const names = new Set(columns.map((c) => c.name));
+  if (!names.has("repeat")) {
+    await db.execute("ALTER TABLE tasks ADD COLUMN repeat TEXT NOT NULL DEFAULT ''");
+  }
 }
 
 async function seed(db: Database) {
@@ -183,13 +194,37 @@ export async function deleteProject(id: number) {
   await db.execute("UPDATE tasks SET archived = 1 WHERE project_id = ?", [id]);
 }
 
+/** 归档项目：与删除同为软删（archived=1） */
+export async function archiveProject(id: number) {
+  await deleteProject(id);
+}
+
+export async function listArchivedProjects(): Promise<ProjectWithCount[]> {
+  const db = await getDb();
+  return db.select<ProjectWithCount[]>(`
+    SELECT p.*,
+      (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.archived = 0) AS task_count,
+      (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.archived = 0 AND t.done = 1) AS done_count
+    FROM projects p
+    WHERE p.archived = 1
+    ORDER BY p.start_date ASC
+  `);
+}
+
+/** 从归档恢复项目及其任务 */
+export async function restoreProject(id: number) {
+  const db = await getDb();
+  await db.execute("UPDATE projects SET archived = 0 WHERE id = ?", [id]);
+  await db.execute("UPDATE tasks SET archived = 0 WHERE project_id = ?", [id]);
+}
+
 export async function createTask(input: TaskInput): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
     `INSERT INTO tasks
       (project_id, title, start_date, end_date, color, priority, note, has_time, time_point,
-       reminder, reminder_offset_minutes, done, is_temp, todo_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+       reminder, reminder_offset_minutes, done, is_temp, todo_date, repeat)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
     [
       input.project_id,
       input.title,
@@ -204,6 +239,7 @@ export async function createTask(input: TaskInput): Promise<number> {
       input.reminder_offset_minutes,
       input.is_temp,
       input.todo_date,
+      input.repeat,
     ],
   );
   return Number(result.lastInsertId);
@@ -215,7 +251,7 @@ export async function updateTask(id: number, input: TaskInput) {
     `UPDATE tasks SET
        project_id = ?, title = ?, start_date = ?, end_date = ?, color = ?, priority = ?,
        note = ?, has_time = ?, time_point = ?, reminder = ?, reminder_offset_minutes = ?,
-       is_temp = ?, todo_date = ?
+       is_temp = ?, todo_date = ?, repeat = ?
      WHERE id = ?`,
     [
       input.project_id,
@@ -231,9 +267,21 @@ export async function updateTask(id: number, input: TaskInput) {
       input.reminder_offset_minutes,
       input.is_temp,
       input.todo_date,
+      input.repeat,
       id,
     ],
   );
+}
+
+/** 重复任务完成后的日期推进：直接写入下一周期的起止日期与临时日期 */
+export async function setTaskDates(id: number, startDate: string, endDate: string, todoDate: string | null) {
+  const db = await getDb();
+  await db.execute("UPDATE tasks SET start_date = ?, end_date = ?, todo_date = ? WHERE id = ?", [
+    startDate,
+    endDate,
+    todoDate,
+    id,
+  ]);
 }
 
 export async function deleteTask(id: number) {

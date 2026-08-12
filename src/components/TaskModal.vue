@@ -1,13 +1,19 @@
 <script setup lang="ts">
-import { reactive, watch } from "vue";
-import { Trash2, X } from "@lucide/vue";
-import type { Color, Priority, TaskInput } from "../lib/types";
+import { computed, reactive, watch } from "vue";
+import { Repeat2, Trash2, X } from "@lucide/vue";
+import type { Color, Priority, Repeat, TaskInput } from "../lib/types";
 import * as db from "../lib/db";
 import { closeModals, refresh, store } from "../lib/store";
 import { today } from "../lib/format";
 
 const colors: Color[] = ["red", "amber", "green", "blue", "purple", "teal"];
 const priorities: Priority[] = ["P0", "P1", "P2", "P3"];
+const repeatOptions: Array<{ value: Repeat; label: string; hint: string }> = [
+  { value: "", label: "不重复", hint: "" },
+  { value: "daily", label: "每天", hint: "完成后顺延到次日" },
+  { value: "weekly", label: "每周", hint: "完成后顺延 7 天" },
+  { value: "monthly", label: "每月", hint: "完成后顺延到下月同日" },
+];
 
 const form = reactive({
   project_id: null as number | null,
@@ -21,7 +27,19 @@ const form = reactive({
   time_point: "09:00",
   reminder: false,
   reminder_offset_minutes: 0,
+  repeat: "" as Repeat,
 });
+
+const repeatHint = computed(() => repeatOptions.find((o) => o.value === form.repeat)?.hint ?? "");
+const isTemp = computed(() => form.project_id === null);
+
+// 临时待办是单日任务：结束日期跟随开始日期
+watch(
+  () => [form.project_id, form.start_date] as const,
+  () => {
+    if (form.project_id === null) form.end_date = form.start_date;
+  },
+);
 
 watch(
   () => store.taskModalOpen,
@@ -44,6 +62,7 @@ function init() {
     form.time_point = task.time_point ?? "09:00";
     form.reminder = Boolean(task.reminder);
     form.reminder_offset_minutes = task.reminder ? task.reminder_offset_minutes : -1;
+    form.repeat = task.repeat ?? "";
     return;
   }
 
@@ -59,6 +78,7 @@ function init() {
   form.time_point = "09:00";
   form.reminder = false;
   form.reminder_offset_minutes = -1;
+  form.repeat = "";
 }
 
 async function save() {
@@ -78,6 +98,7 @@ async function save() {
     reminder_offset_minutes: form.has_time && form.reminder_offset_minutes >= 0 ? form.reminder_offset_minutes : 0,
     is_temp: isTemp ? 1 : 0,
     todo_date: isTemp ? form.start_date : null,
+    repeat: form.repeat,
   };
 
   if (store.editingTask) {
@@ -136,12 +157,13 @@ async function remove() {
 
         <div class="grid grid-cols-2 gap-3">
           <label class="flex flex-col gap-1.5">
-            <span class="text-[13px] font-medium">开始日期</span>
-            <input v-model="form.start_date" type="date" class="theme-input" :disabled="form.project_id === null" />
+            <span class="text-[13px] font-medium">日期</span>
+            <input v-model="form.start_date" type="date" class="theme-input" />
           </label>
           <label class="flex flex-col gap-1.5">
             <span class="text-[13px] font-medium">结束日期</span>
-            <input v-model="form.end_date" type="date" class="theme-input" :disabled="form.project_id === null" />
+            <input v-model="form.end_date" type="date" class="theme-input" :disabled="isTemp" />
+            <span v-if="isTemp" class="text-xs text-[var(--app-muted)]">临时待办为单日，跟随所选日期</span>
           </label>
         </div>
 
@@ -172,6 +194,20 @@ async function remove() {
           </select>
           <span class="text-xs text-[var(--app-muted)]">
             {{ form.has_time && form.reminder_offset_minutes >= 0 ? "应用运行时到点弹窗；最小化到托盘也会提醒" : form.has_time ? "不提醒" : "需先开启“具体到时间点”" }}
+          </span>
+        </label>
+
+        <label class="flex flex-col gap-1.5">
+          <span class="flex items-center gap-1 text-[13px] font-medium">
+            <Repeat2 :size="13" /> 重复
+          </span>
+          <select v-model="form.repeat" class="theme-input">
+            <option v-for="option in repeatOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+          <span class="text-xs text-[var(--app-muted)]">
+            {{ repeatHint || "任务完成后保持完成，不会自动顺延" }}
           </span>
         </label>
 

@@ -1,17 +1,59 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { CalendarRange, Plus } from "@lucide/vue";
+import ProjectContextMenu from "../components/ProjectContextMenu.vue";
 import type { ProjectWithCount } from "../lib/types";
 import { dateInRange, formatShort, today } from "../lib/format";
-import { openProject, openProjectModal, store, tasksOnDate } from "../lib/store";
+import * as db from "../lib/db";
+import { openProject, openProjectModal, refresh, store, tasksOnDate } from "../lib/store";
 
 const todayValue = today();
-const activeProjects = computed(() => store.projects.filter((p) => dateInRange(todayValue, p.start_date, p.end_date)));
+
+function isProjectDone(p: ProjectWithCount): boolean {
+  return p.task_count > 0 && p.done_count === p.task_count;
+}
+
+const activeProjects = computed(() => store.projects.filter((p) => !isProjectDone(p) && dateInRange(todayValue, p.start_date, p.end_date)));
 const upcomingProjects = computed(() => store.projects.filter((p) => p.start_date > todayValue));
 const todayDue = computed(() => tasksOnDate(todayValue).filter((t) => !t.is_temp && !t.done).length);
 
 function progress(p: ProjectWithCount): number {
   return p.task_count ? Math.round((p.done_count / p.task_count) * 100) : 0;
+}
+
+function statusLabel(p: ProjectWithCount): "进行中" | "未开始" | "已完成" {
+  if (isProjectDone(p)) return "已完成";
+  if (dateInRange(todayValue, p.start_date, p.end_date)) return "进行中";
+  return "未开始";
+}
+
+// 自定义右键菜单：仅项目卡片区域，禁用原生菜单
+const contextMenu = ref<{ project: ProjectWithCount; x: number; y: number } | null>(null);
+
+function openContextMenu(project: ProjectWithCount, event: MouseEvent) {
+  contextMenu.value = { project, x: event.clientX, y: event.clientY };
+}
+
+// 捕获阶段先于卡片自身的 handler 执行：右键在卡片上→由卡片打开菜单；
+// 右键在其他地方→关闭菜单（原生菜单已由 App.vue 全局禁用）
+function onDocContextMenu(event: MouseEvent) {
+  if ((event.target as HTMLElement).closest(".project-card")) return;
+  contextMenu.value = null;
+}
+
+onMounted(() => document.addEventListener("contextmenu", onDocContextMenu, true));
+onBeforeUnmount(() => document.removeEventListener("contextmenu", onDocContextMenu, true));
+
+function onMenuEdit(project: ProjectWithCount) {
+  contextMenu.value = null;
+  openProjectModal(project);
+}
+
+async function onMenuArchive(project: ProjectWithCount) {
+  contextMenu.value = null;
+  if (!confirm(`归档项目“${project.name}”？项目下的任务会一并归档。`)) return;
+  await db.archiveProject(project.id);
+  await refresh();
 }
 </script>
 
@@ -47,13 +89,14 @@ function progress(p: ProjectWithCount): number {
       <article
         v-for="project in store.projects"
         :key="project.id"
-        class="cursor-pointer rounded-2xl border border-[var(--app-border)] border-t-4 bg-[var(--app-panel)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--app-primary)]"
+        class="project-card cursor-pointer rounded-2xl border border-[var(--app-border)] border-t-4 bg-[var(--app-panel)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--app-primary)]"
         :class="`task-color-${project.color}`"
         :style="{ borderTopColor: 'var(--task-color)' }"
         role="button"
         tabindex="0"
         @click="openProject(project.id)"
         @keydown.enter="openProject(project.id)"
+        @contextmenu.prevent="openContextMenu(project, $event)"
       >
         <div class="flex items-center gap-2">
           <span class="h-2.5 w-2.5 flex-none rounded-[4px]" :style="{ background: 'var(--task-color)' }"></span>
@@ -61,11 +104,12 @@ function progress(p: ProjectWithCount): number {
           <span
             class="rounded-full px-2 py-0.5 text-[11px]"
             :class="{
-              'bg-[var(--app-blue-soft)] text-[var(--app-blue)]': dateInRange(todayValue, project.start_date, project.end_date),
-              'bg-[var(--app-panel-3)] text-[var(--app-muted)]': project.start_date > todayValue,
+              'bg-[var(--app-blue-soft)] text-[var(--app-blue)]': statusLabel(project) === '进行中',
+              'bg-[var(--app-panel-3)] text-[var(--app-muted)]': statusLabel(project) === '未开始',
+              'bg-[var(--app-green-soft)] text-[var(--app-green)]': statusLabel(project) === '已完成',
             }"
           >
-            {{ dateInRange(todayValue, project.start_date, project.end_date) ? "进行中" : "未开始" }}
+            {{ statusLabel(project) }}
           </span>
         </div>
 
@@ -88,5 +132,15 @@ function progress(p: ProjectWithCount): number {
     <div v-else class="theme-surface-2 rounded-xl px-4 py-10 text-center text-[13px] text-[var(--app-muted)]">
       还没有项目，点击右上角“新建项目”开始。
     </div>
+
+    <ProjectContextMenu
+      v-if="contextMenu"
+      :project="contextMenu.project"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      @edit="onMenuEdit"
+      @archive="onMenuArchive"
+      @close="contextMenu = null"
+    />
   </div>
 </template>

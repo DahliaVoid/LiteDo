@@ -18,6 +18,7 @@ import TodayView from "./views/TodayView.vue";
 import CalendarView from "./views/CalendarView.vue";
 import ProjectsView from "./views/ProjectsView.vue";
 import ProjectDetailView from "./views/ProjectDetailView.vue";
+import ArchiveView from "./views/ArchiveView.vue";
 import ProjectModal from "./components/ProjectModal.vue";
 import TaskModal from "./components/TaskModal.vue";
 import ReminderPopup from "./components/ReminderPopup.vue";
@@ -30,37 +31,28 @@ const pageMeta: Record<string, { title: string; sub: string }> = {
   calendar: { title: "日历", sub: "日历待办 + 项目甘特图" },
   projects: { title: "项目", sub: "按执行日期管理项目和细化任务" },
   "project-detail": { title: "项目详情", sub: "项目任务与执行日期" },
-  placeholder: { title: "归档", sub: "待需求确认后补充" },
+  archive: { title: "归档", sub: "归档项目可随时恢复" },
+  placeholder: { title: "设置", sub: "待需求确认后补充" },
 };
 
-const meta = computed(() => {
-  if (store.view === "placeholder") {
-    return store.placeholderTitle === "设置"
-      ? { title: "设置", sub: "待需求确认后补充" }
-      : { title: "归档", sub: "已完成内容的历史归档" };
-  }
-  return pageMeta[store.view];
-});
+const meta = computed(() => pageMeta[store.view]);
 
 const shownReminderIds = new Set<number>();
 let reminderTimer: number | undefined;
 
 function navTo(name: string) {
   if (name === "archive") {
-    store.view = "placeholder";
-    store.placeholderTitle = "归档";
+    store.view = "archive";
   } else if (name === "settings") {
     store.view = "placeholder";
-    store.placeholderTitle = "设置";
   } else {
     store.view = name as typeof store.view;
   }
 }
 
 function isActive(name: string): boolean {
-  if (name === "archive" || name === "settings") {
-    return store.view === "placeholder" && store.placeholderTitle === (name === "archive" ? "归档" : "设置");
-  }
+  if (name === "archive") return store.view === "archive";
+  if (name === "settings") return store.view === "placeholder";
   return store.view === name;
 }
 
@@ -112,6 +104,8 @@ async function checkReminders() {
 }
 
 onMounted(async () => {
+  // 全局禁用原生右键菜单（项目卡片区域由 ProjectsView 弹出自定义菜单）
+  document.addEventListener("contextmenu", preventContextMenu);
   try {
     await refresh();
   } catch (error) {
@@ -121,8 +115,13 @@ onMounted(async () => {
   reminderTimer = window.setInterval(checkReminders, 15000);
 });
 
+function preventContextMenu(event: MouseEvent) {
+  event.preventDefault();
+}
+
 onUnmounted(() => {
   if (reminderTimer) window.clearInterval(reminderTimer);
+  document.removeEventListener("contextmenu", preventContextMenu);
 });
 </script>
 
@@ -220,12 +219,11 @@ onUnmounted(() => {
         <CalendarView v-else-if="store.view === 'calendar'" />
         <ProjectsView v-else-if="store.view === 'projects'" />
         <ProjectDetailView v-else-if="store.view === 'project-detail'" />
+        <ArchiveView v-else-if="store.view === 'archive'" />
         <section v-else class="theme-surface-2 grid min-h-80 place-items-center rounded-2xl text-center">
           <div>
-            <h2 class="text-base font-medium">{{ store.placeholderTitle }}</h2>
-            <p class="mt-1 text-[13px] text-[var(--app-muted)]">
-              {{ store.placeholderTitle === "设置" ? "设置页将在后续版本补充" : "已完成内容会进入归档" }}
-            </p>
+            <h2 class="text-base font-medium">设置</h2>
+            <p class="mt-1 text-[13px] text-[var(--app-muted)]">设置页将在后续版本补充</p>
           </div>
         </section>
       </div>
