@@ -14,6 +14,8 @@ interface GanttLane {
   color: string;
   start: string;
   end: string;
+  /** 任务行对应的任务对象（type=task 时存在），用于横条右键编辑/删除 */
+  task?: Task;
 }
 
 const now = new Date();
@@ -58,6 +60,7 @@ const ganttLanes = computed<GanttLane[]>(() => {
         color: task.color,
         start: task.start_date,
         end: task.end_date,
+        task,
       });
     }
   }
@@ -106,7 +109,8 @@ function barStyle(lane: GanttLane) {
   if (end <= start) return { display: "none" };
   const isProject = lane.type === "project";
   return {
-    gridColumn: `${start + 2} / ${end + 2}`,
+    // 横条位于 laneColumns 子网格（第 1 列即当月 1 号，无标签列），偏移 +1
+    gridColumn: `${start + 1} / ${end + 1}`,
     background: isProject ? "transparent" : "var(--task-color)",
     color: isProject ? "var(--task-color)" : "#fff",
     border: isProject ? "1.5px dashed var(--task-color)" : "none",
@@ -125,6 +129,12 @@ function openTaskMenu(task: Task, event: MouseEvent) {
   taskMenu.value = { task, x: event.clientX, y: event.clientY };
 }
 
+// 甘特图横条右键：等同任务右键，仅任务行响应（项目行不响应）
+function openLaneMenu(lane: GanttLane, event: MouseEvent) {
+  if (!lane.task) return;
+  taskMenu.value = { task: lane.task, x: event.clientX, y: event.clientY };
+}
+
 function onMenuEdit(task: Task) {
   taskMenu.value = null;
   openTaskModal(task.project_id, task);
@@ -137,9 +147,11 @@ async function onMenuDelete(task: Task) {
   await refresh();
 }
 
-// 右键空白区域关闭菜单（原生菜单已由 App.vue 全局禁用）
+// 右键空白区域关闭菜单（原生菜单已由 App.vue 全局禁用）；
+// 目标是待办项或甘特图横条则不动，由各自的 handler 打开菜单
 function onDocContextMenu(event: MouseEvent) {
-  if ((event.target as HTMLElement).closest(".calendar-task-item")) return;
+  const target = event.target as HTMLElement;
+  if (target.closest(".calendar-task-item") || target.closest(".gantt-bar")) return;
   taskMenu.value = null;
 }
 
@@ -295,9 +307,11 @@ async function onToggle(task: Task) {
               <div class="grid border-b border-[var(--app-border)]" :style="{ gridTemplateColumns: laneColumns, gridColumn: '2 / -1' }">
                 <div
                   v-if="barStyle(lane).display !== 'none'"
-                  class="mx-0.5 my-1 flex h-6 items-center overflow-hidden rounded-md px-2 text-[11px] whitespace-nowrap"
+                  class="gantt-bar mx-0.5 my-1 flex h-6 items-center overflow-hidden rounded-md px-2 text-[11px] whitespace-nowrap transition hover:brightness-110"
                   :class="`task-color-${lane.color}`"
                   :style="barStyle(lane)"
+                  :title="lane.task ? `右键编辑/删除：${lane.title}` : undefined"
+                  @contextmenu.prevent="openLaneMenu(lane, $event)"
                 >
                   {{ lane.title }}
                 </div>
