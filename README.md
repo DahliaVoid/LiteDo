@@ -15,6 +15,12 @@
 - 提醒仅在应用运行时生效；关闭窗口会最小化到托盘，托盘菜单可恢复窗口或退出
 - 数据全部保存在本地 SQLite，无需联网
 
+## 界面截图
+<p align="center">
+  <img src="docs/example1.png" alt="LiteDo Calendar" width="45%">
+  <img src="docs/example2.png" alt="LiteDo Todo" width="45%">
+</p>
+
 ## 技术栈
 
 - 前端：Vue 3 + TypeScript + Tailwind CSS 4
