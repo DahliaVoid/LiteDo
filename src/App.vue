@@ -11,7 +11,7 @@ import {
 } from "@lucide/vue";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { currentMonitor, getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
+import { currentMonitor, PhysicalPosition } from "@tauri-apps/api/window";
 import TodayView from "./views/TodayView.vue";
 import CalendarView from "./views/CalendarView.vue";
 import ProjectsView from "./views/ProjectsView.vue";
@@ -20,7 +20,6 @@ import ArchiveView from "./views/ArchiveView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import ProjectModal from "./components/ProjectModal.vue";
 import TaskModal from "./components/TaskModal.vue";
-import ReminderPopup from "./components/ReminderPopup.vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import type { Task } from "./lib/types";
 import { dateInRange, reminderAt, today } from "./lib/format";
@@ -75,7 +74,6 @@ async function showExternalReminder(task: Task, scheduledAt: string) {
   if (existing) {
     await emitTo("reminder", "reminder-task", payload);
     await existing.show();
-    await existing.setFocus();
     return;
   }
 
@@ -86,6 +84,8 @@ async function showExternalReminder(task: Task, scheduledAt: string) {
     width: 380,
     height: 150,
     decorations: false,
+    transparent: true,
+    shadow: false,
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,
@@ -95,24 +95,19 @@ async function showExternalReminder(task: Task, scheduledAt: string) {
     const monitor = await currentMonitor();
     if (monitor) {
       const scale = monitor.scaleFactor;
+      const workArea = monitor.workArea;
       await popup.setPosition(new PhysicalPosition(
-        monitor.position.x + monitor.size.width - Math.round(404 * scale),
-        monitor.position.y + monitor.size.height - Math.round(174 * scale),
+        workArea.position.x + workArea.size.width - Math.round(404 * scale),
+        // 工作区底部已排除任务栏，再额外留出 24px 呼吸空间。
+        workArea.position.y + workArea.size.height - Math.round(174 * scale),
       ));
     }
     await popup.show();
-    await popup.setFocus();
   });
 }
 
 async function checkReminders() {
   const now = new Date();
-  let mainVisible = true;
-  try {
-    mainVisible = await getCurrentWindow().isVisible();
-  } catch {
-    // 在普通浏览器预览中没有 Tauri 窗口，按可见窗口处理即可。
-  }
   for (const task of store.tasks) {
     if (!task.has_time || !task.reminder || !task.time_point || task.done) continue;
     if (!dateInRange(today(), task.start_date, task.end_date)) continue;
@@ -124,7 +119,13 @@ async function checkReminders() {
     if (store.snoozedUntil[key] && new Date(store.snoozedUntil[key]) > now) continue;
     if (store.reminders.some((item) => reminderKey(item) === key)) continue;
     store.reminders.push(task);
-    if (!mainVisible) await showExternalReminder(task, scheduledAt);
+    // 与之前的 Windows 系统通知一致：主窗口可见时也显示桌面提醒。
+    try {
+      await showExternalReminder(task, scheduledAt);
+    } catch (error) {
+      // 外部窗口失败时仍保留应用内提醒，并在开发者控制台保留诊断信息。
+      console.error("创建桌面提醒窗口失败", error);
+    }
   }
 }
 
@@ -262,7 +263,6 @@ onUnmounted(() => {
 
     <ProjectModal />
     <TaskModal />
-    <ReminderPopup />
     <ConfirmDialog />
   </div>
 </template>

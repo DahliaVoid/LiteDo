@@ -21,6 +21,10 @@ pub fn run() {
       Some(vec!["--autostart"]),
     ))
     .on_window_event(|window, event| {
+      // 仅主窗口关闭时最小化到托盘；提醒窗口需要能正常关闭。
+      if window.label() != "main" {
+        return;
+      }
       if let WindowEvent::CloseRequested { api, .. } = event {
         let _ = window.hide();
         api.prevent_close();

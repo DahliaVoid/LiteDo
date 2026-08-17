@@ -5,6 +5,11 @@
   "windows": ["main", "reminder"],
   "permissions": [
     "core:default",
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-create",
+    "core:window:allow-show",
+    "core:window:allow-set-position",
+    "core:window:allow-close",
     "sql:default",
     "sql:allow-execute",
     "sql:allow-select",
