@@ -1,20 +1,14 @@
 <script setup lang="ts">
 import { BellRing } from "@lucide/vue";
 import type { Task } from "../lib/types";
-import * as db from "../lib/db";
-import { store } from "../lib/store";
-import { today } from "../lib/format";
+import { dismissReminder, snoozeReminder, store } from "../lib/store";
 
 async function dismiss(task: Task) {
-  const date = today();
-  await db.setTaskReminded(task.id, date);
-  task.last_reminded_date = date;
-  store.reminders = store.reminders.filter((t) => t.id !== task.id);
+  await dismissReminder(task);
 }
 
 function snooze(task: Task) {
-  store.reminders = store.reminders.filter((t) => t.id !== task.id);
-  store.snoozedUntil = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  snoozeReminder(task);
 }
 </script>
 

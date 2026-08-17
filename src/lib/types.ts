@@ -36,6 +36,8 @@ export interface Task {
   is_temp: number;
   todo_date: string | null;
   last_reminded_date: string | null;
+  /** 最近一次已确认的具体提醒时刻（ISO 字符串）。 */
+  last_reminded_at: string | null;
   repeat: Repeat;
   archived: number;
   created_at: string;

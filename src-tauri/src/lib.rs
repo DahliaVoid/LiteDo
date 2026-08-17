@@ -16,6 +16,10 @@ pub fn run() {
     }))
     .plugin(tauri_plugin_sql::Builder::default().build())
     .plugin(tauri_plugin_notification::init())
+    .plugin(tauri_plugin_autostart::init(
+      tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+      Some(vec!["--autostart"]),
+    ))
     .on_window_event(|window, event| {
       if let WindowEvent::CloseRequested { api, .. } = event {
         let _ = window.hide();

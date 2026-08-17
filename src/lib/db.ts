@@ -39,6 +39,7 @@ async function getDb(): Promise<Database> {
           is_temp INTEGER NOT NULL DEFAULT 0,
           todo_date TEXT,
           last_reminded_date TEXT,
+          last_reminded_at TEXT,
           repeat TEXT NOT NULL DEFAULT '',
           archived INTEGER NOT NULL DEFAULT 0,
           created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
@@ -58,6 +59,9 @@ async function migrate(db: Database) {
   const names = new Set(columns.map((c) => c.name));
   if (!names.has("repeat")) {
     await db.execute("ALTER TABLE tasks ADD COLUMN repeat TEXT NOT NULL DEFAULT ''");
+  }
+  if (!names.has("last_reminded_at")) {
+    await db.execute("ALTER TABLE tasks ADD COLUMN last_reminded_at TEXT");
   }
 }
 
@@ -251,7 +255,7 @@ export async function updateTask(id: number, input: TaskInput) {
     `UPDATE tasks SET
        project_id = ?, title = ?, start_date = ?, end_date = ?, color = ?, priority = ?,
        note = ?, has_time = ?, time_point = ?, reminder = ?, reminder_offset_minutes = ?,
-       is_temp = ?, todo_date = ?, repeat = ?
+       is_temp = ?, todo_date = ?, repeat = ?, last_reminded_date = NULL, last_reminded_at = NULL
      WHERE id = ?`,
     [
       input.project_id,
@@ -276,7 +280,7 @@ export async function updateTask(id: number, input: TaskInput) {
 /** 重复任务完成后的日期推进：直接写入下一周期的起止日期与临时日期 */
 export async function setTaskDates(id: number, startDate: string, endDate: string, todoDate: string | null) {
   const db = await getDb();
-  await db.execute("UPDATE tasks SET start_date = ?, end_date = ?, todo_date = ? WHERE id = ?", [
+  await db.execute("UPDATE tasks SET start_date = ?, end_date = ?, todo_date = ?, last_reminded_date = NULL, last_reminded_at = NULL WHERE id = ?", [
     startDate,
     endDate,
     todoDate,
@@ -294,7 +298,7 @@ export async function setTaskDone(id: number, done: number) {
   await db.execute("UPDATE tasks SET done = ? WHERE id = ?", [done, id]);
 }
 
-export async function setTaskReminded(id: number, date: string) {
+export async function setTaskReminded(id: number, reminderAt: string) {
   const db = await getDb();
-  await db.execute("UPDATE tasks SET last_reminded_date = ? WHERE id = ?", [date, id]);
+  await db.execute("UPDATE tasks SET last_reminded_date = ?, last_reminded_at = ? WHERE id = ?", [today(), reminderAt, id]);
 }

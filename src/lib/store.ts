@@ -1,7 +1,7 @@
 import { reactive } from "vue";
 import type { ProjectWithCount, Task } from "./types";
 import * as db from "./db";
-import { advanceRepeat, dateInRange, sortPriority, today } from "./format";
+import { advanceRepeat, dateInRange, reminderAt, sortPriority, today } from "./format";
 
 export interface ConfirmState {
   title: string;
@@ -13,7 +13,7 @@ export interface ConfirmState {
 }
 
 export const store = reactive({
-  view: "today" as "today" | "calendar" | "projects" | "project-detail" | "archive" | "placeholder",
+  view: "today" as "today" | "calendar" | "projects" | "project-detail" | "archive" | "settings",
   projects: [] as ProjectWithCount[],
   archivedProjects: [] as ProjectWithCount[],
   tasks: [] as Task[],
@@ -26,7 +26,8 @@ export const store = reactive({
   editingTask: null as Task | null,
   taskModalProjectId: null as number | null,
   reminders: [] as Task[],
-  snoozedUntil: "",
+  // 以「任务 ID + 原定提醒时刻」为键，避免一个任务的改期影响旧提醒状态。
+  snoozedUntil: {} as Record<string, string>,
   confirm: null as ConfirmState | null,
 });
 
@@ -109,6 +110,26 @@ export async function toggleTask(task: Task) {
   const next = task.done ? 0 : 1;
   await db.setTaskDone(task.id, next);
   task.done = next;
+}
+
+/** 同一任务在改期后仍可提醒，因此去重键必须包含具体提醒时刻。 */
+export function reminderKey(task: Task, scheduledAt?: string): string {
+  return `${task.id}:${scheduledAt ?? reminderAt(task)?.toISOString() ?? ""}`;
+}
+
+export async function dismissReminder(task: Task, scheduledAt?: string) {
+  const at = scheduledAt ?? reminderAt(task)?.toISOString() ?? new Date().toISOString();
+  await db.setTaskReminded(task.id, at);
+  task.last_reminded_at = at;
+  store.reminders = store.reminders.filter((item) => item.id !== task.id);
+  delete store.snoozedUntil[reminderKey(task, at)];
+}
+
+/** “稍后提醒”固定为 30 分钟后，仅延后当前这一条提醒。 */
+export function snoozeReminder(task: Task, scheduledAt?: string) {
+  const key = reminderKey(task, scheduledAt);
+  store.reminders = store.reminders.filter((item) => item.id !== task.id);
+  store.snoozedUntil[key] = new Date(Date.now() + 30 * 60 * 1000).toISOString();
 }
 
 export function openProject(id: number) {

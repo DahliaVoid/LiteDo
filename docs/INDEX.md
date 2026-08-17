@@ -24,14 +24,16 @@
 │   │   ├── CalendarView.vue    # 日历 + 甘特图
 │   │   ├── ProjectsView.vue    # 项目列表卡片（含统计卡片、右键菜单）
 │   │   ├── ProjectDetailView.vue # 项目详情（任务列表 + 进度）
-│   │   └── ArchiveView.vue     # 归档页（归档项目列表 + 恢复）
+│   │   ├── ArchiveView.vue     # 归档页（归档项目列表 + 恢复）
+│   │   └── SettingsView.vue    # 设置页（开机启动）
 │   └── components/
 │       ├── ProjectModal.vue    # 新建/编辑项目弹窗
 │       ├── TaskModal.vue       # 新建/编辑任务弹窗（时间点、提醒、重复）
 │       ├── TaskItem.vue        # 单条任务卡片（勾选/编辑/删除）
 │       ├── ContextMenu.vue     # 通用右键菜单（跟随鼠标、按可视范围钳制位置，slot 放菜单项）
 │       ├── ConfirmDialog.vue   # 主题化确认弹窗（替代原生 confirm，居中显示）
-│       └── ReminderPopup.vue   # 应用内提醒弹窗（右下角）
+│       ├── ReminderPopup.vue   # 应用内提醒弹窗（右下角）
+│       └── ExternalReminderWindow.vue # 托盘隐藏时的独立提醒窗口
 ├── src-tauri/
 │   ├── tauri.conf.json         # 窗口/打包配置
 │   ├── capabilities/default.json # 权限：sql、notification、core
@@ -72,7 +74,7 @@
 | done | INTEGER | 0/1 完成状态 |
 | is_temp | INTEGER | 1=临时待办（project_id 必为 NULL） |
 | todo_date | TEXT | 临时任务所属日期 |
-| last_reminded_date | TEXT | 当日已提醒标记（防重复提醒） |
+| last_reminded_at | TEXT | 已确认的具体提醒时刻（ISO 字符串；改时间后可再次提醒） |
 | repeat | TEXT | 重复规则：`''`=不重复，`daily`/`weekly`/`monthly` |
 | archived | INTEGER | 软删除 |
 | created_at | TEXT | 本地时间 |
@@ -98,7 +100,7 @@
 
 ### src/lib/store.ts —— 全局响应式状态 + 业务编排
 
-- `store`（reactive 单例）：当前视图 view、projects/tasks 数组、选中项目/日期、各弹窗开关、编辑对象、提醒队列、snoozedUntil。
+- `store`（reactive 单例）：当前视图 view、projects/tasks 数组、选中项目/日期、各弹窗开关、编辑对象、提醒队列、按提醒时刻记录的 snoozedUntil。
 - `refresh()`：重新拉取 projects + archivedProjects + tasks（所有变更后调用）。
 - 派生查询：`currentProject()`、`projectTasks()`、`todayTempTasks()`（todo_date=今天且未归档）、`todayProjectTasks()`（未完成且日期覆盖今天）、`tasksOnDate()`。
 - 操作：`toggleTask()`（**重复任务勾选完成 = 直接顺延到下一周期、done 保持 0**，不重复任务走 setTaskDone）、`openProject()`、`openProjectModal()`、`openTaskModal()`、`closeModals()`。
@@ -166,13 +168,17 @@
 
 ### src/components/ReminderPopup.vue —— 应用内提醒
 
-- 右下角卡片列表；`dismiss` 写 last_reminded_date 防重复；`snooze` 5 分钟后重新检查。
+- 右下角卡片列表；`dismiss` 写具体提醒时刻防重复；`snooze` 固定 30 分钟后重新提醒。
+
+### src/views/SettingsView.vue —— 设置
+
+- 提供“开机启动”开关，调用 Tauri Autostart 插件向 Windows 注册或移除当前用户的登录启动项。
 
 ### src/App.vue —— 根组件
 
 - 侧边栏导航（今日/日历/项目/归档/设置）+ 顶栏（标题 + 新建按钮按视图切换）。
-- `checkReminders()` 每 15s 轮询（App.vue 内实现，基于 `store.tasks`），窗口隐藏时发系统通知。
-- 视图切换靠 `store.view` 字符串（`today/calendar/projects/project-detail/archive/placeholder`）。
+- `checkReminders()` 每 15s 轮询（App.vue 内实现，基于 `store.tasks`）；窗口隐藏时显示与应用同主题的独立提醒窗口，避免 Windows 开发通知显示为 PowerShell。
+- 视图切换靠 `store.view` 字符串（`today/calendar/projects/project-detail/archive/settings`）。
 - **全局禁用原生右键菜单**：`onMounted` 注册 document 级 `contextmenu` 监听（`preventDefault`），卸载时移除。
 - 底部挂载 ProjectModal / TaskModal / ReminderPopup。
 
@@ -187,8 +193,8 @@
 
 ## 关键业务流程
 
-1. **启动**：`refresh()` 拉取全量数据 → `checkReminders()` 每 15s 检查提醒（需满足：has_time、有 reminder、未完成、日期覆盖今天、今日未提醒过）。
-2. **提醒**：`reminderAt()` 算时刻 → 应用内 push 到 `store.reminders`（ReminderPopup 显示）+ 系统通知。
+1. **启动**：`refresh()` 拉取全量数据 → `checkReminders()` 每 15s 检查提醒（需满足：has_time、有 reminder、未完成、日期覆盖今天、该具体时刻尚未确认）。
+2. **提醒**：`reminderAt()` 算时刻 → 以“任务 ID + 具体提醒时刻”去重；窗口可见显示应用内卡片，隐藏时显示同主题独立窗口。编辑任务会清除旧提醒记录以便新时间重新提醒；“稍后提醒”为 30 分钟后。
 3. **完成重复任务**（store.toggleTask）：勾选完成时不写 done=1，而是把 start/end 按 repeat 规则推进（每日+1 天 / 每周+7 天 / 每月+1 月），若推进后仍在过去则继续推进直到覆盖今天，`todo_date` 同步（临时任务）；任务保持未完成状态。**注意：务必不要通过 setTaskDone 写 done=1 再顺延，否则 DB 会残留已完成状态（已修复的 bug）。**
 4. **删除/归档**：全部软删（archived=1）；归档项目在归档页可见，可恢复（restoreProject 置 0）。
 5. **甘特图“今天”线**：grid 定位（见 CalendarView 说明），与窗口宽度无关。

@@ -1,5 +1,7 @@
 import { createApp } from "vue";
 import App from "./App.vue";
+import ExternalReminderWindow from "./components/ExternalReminderWindow.vue";
 import "./style.css";
 
-createApp(App).mount("#app");
+const isReminderWindow = new URLSearchParams(window.location.search).has("reminder");
+createApp(isReminderWindow ? ExternalReminderWindow : App).mount("#app");

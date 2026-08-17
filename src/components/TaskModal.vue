@@ -124,7 +124,7 @@ async function remove() {
     v-if="store.taskModalOpen"
     class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
   >
-    <div class="theme-surface w-full max-w-lg rounded-2xl p-5 shadow-2xl">
+    <div class="theme-surface flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl p-5 shadow-2xl">
       <div class="mb-4 flex items-center justify-between">
         <h3 class="text-base font-medium">
           {{ store.editingTask ? "编辑任务" : "新建任务" }}
@@ -139,7 +139,7 @@ async function remove() {
         </button>
       </div>
 
-      <form class="flex flex-col gap-3" @submit.prevent="save">
+      <form class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1" @submit.prevent="save">
         <label class="flex flex-col gap-1.5">
           <span class="text-[13px] font-medium">任务名称</span>
           <input v-model="form.title" class="theme-input" placeholder="例如：确认供应商寄样" />

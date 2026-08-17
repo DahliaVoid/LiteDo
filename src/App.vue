@@ -9,23 +9,22 @@ import {
   Settings,
   Sun,
 } from "@lucide/vue";
-import {
-  isPermissionGranted,
-  requestPermission,
-  sendNotification,
-} from "@tauri-apps/plugin-notification";
+import { emitTo, listen } from "@tauri-apps/api/event";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { currentMonitor, getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
 import TodayView from "./views/TodayView.vue";
 import CalendarView from "./views/CalendarView.vue";
 import ProjectsView from "./views/ProjectsView.vue";
 import ProjectDetailView from "./views/ProjectDetailView.vue";
 import ArchiveView from "./views/ArchiveView.vue";
+import SettingsView from "./views/SettingsView.vue";
 import ProjectModal from "./components/ProjectModal.vue";
 import TaskModal from "./components/TaskModal.vue";
 import ReminderPopup from "./components/ReminderPopup.vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import type { Task } from "./lib/types";
 import { dateInRange, reminderAt, today } from "./lib/format";
-import { openProjectModal, openTaskModal, refresh, store } from "./lib/store";
+import { dismissReminder, openProjectModal, openTaskModal, refresh, reminderKey, snoozeReminder, store } from "./lib/store";
 
 const pageMeta: Record<string, { title: string; sub: string }> = {
   today: { title: "今日清单", sub: "临时待办 + 日期覆盖今天的项目任务" },
@@ -33,19 +32,19 @@ const pageMeta: Record<string, { title: string; sub: string }> = {
   projects: { title: "项目", sub: "按执行日期管理项目和细化任务" },
   "project-detail": { title: "项目详情", sub: "项目任务与执行日期" },
   archive: { title: "归档", sub: "归档项目可随时恢复" },
-  placeholder: { title: "设置", sub: "待需求确认后补充" },
+  settings: { title: "设置", sub: "应用偏好与启动方式" },
 };
 
 const meta = computed(() => pageMeta[store.view]);
 
-const shownReminderIds = new Set<number>();
 let reminderTimer: number | undefined;
+let unlistenReminderAction: (() => void) | undefined;
 
 function navTo(name: string) {
   if (name === "archive") {
     store.view = "archive";
   } else if (name === "settings") {
-    store.view = "placeholder";
+    store.view = "settings";
   } else {
     store.view = name as typeof store.view;
   }
@@ -53,7 +52,7 @@ function navTo(name: string) {
 
 function isActive(name: string): boolean {
   if (name === "archive") return store.view === "archive";
-  if (name === "settings") return store.view === "placeholder";
+  if (name === "settings") return store.view === "settings";
   return store.view === name;
 }
 
@@ -70,37 +69,62 @@ function handleNewTask() {
   openTaskModal();
 }
 
-async function sendNativeNotification(task: Task) {
-  try {
-    let granted = await isPermissionGranted();
-    if (!granted) {
-      const permission = await requestPermission();
-      granted = permission === "granted";
-    }
-    if (granted) {
-      sendNotification({
-        title: `${task.time_point} 提醒`,
-        body: task.title,
-      });
-    }
-  } catch {
-    // 通知不可用时静默
+async function showExternalReminder(task: Task, scheduledAt: string) {
+  const payload = { task, scheduledAt };
+  const existing = await WebviewWindow.getByLabel("reminder");
+  if (existing) {
+    await emitTo("reminder", "reminder-task", payload);
+    await existing.show();
+    await existing.setFocus();
+    return;
   }
+
+  const taskQuery = encodeURIComponent(JSON.stringify(payload));
+  const popup = new WebviewWindow("reminder", {
+    url: `/?reminder=1&task=${taskQuery}`,
+    title: "LiteDo 提醒",
+    width: 380,
+    height: 150,
+    decorations: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    visible: false,
+  });
+  popup.once("tauri://created", async () => {
+    const monitor = await currentMonitor();
+    if (monitor) {
+      const scale = monitor.scaleFactor;
+      await popup.setPosition(new PhysicalPosition(
+        monitor.position.x + monitor.size.width - Math.round(404 * scale),
+        monitor.position.y + monitor.size.height - Math.round(174 * scale),
+      ));
+    }
+    await popup.show();
+    await popup.setFocus();
+  });
 }
 
 async function checkReminders() {
-  if (store.snoozedUntil && new Date(store.snoozedUntil) > new Date()) return;
   const now = new Date();
+  let mainVisible = true;
+  try {
+    mainVisible = await getCurrentWindow().isVisible();
+  } catch {
+    // 在普通浏览器预览中没有 Tauri 窗口，按可见窗口处理即可。
+  }
   for (const task of store.tasks) {
     if (!task.has_time || !task.reminder || !task.time_point || task.done) continue;
     if (!dateInRange(today(), task.start_date, task.end_date)) continue;
-    if (task.last_reminded_date === today()) continue;
     const at = reminderAt(task);
     if (!at || now < at) continue;
-    if (shownReminderIds.has(task.id)) continue;
-    shownReminderIds.add(task.id);
+    const scheduledAt = at.toISOString();
+    const key = reminderKey(task, scheduledAt);
+    if (task.last_reminded_at === scheduledAt) continue;
+    if (store.snoozedUntil[key] && new Date(store.snoozedUntil[key]) > now) continue;
+    if (store.reminders.some((item) => reminderKey(item) === key)) continue;
     store.reminders.push(task);
-    await sendNativeNotification(task);
+    if (!mainVisible) await showExternalReminder(task, scheduledAt);
   }
 }
 
@@ -112,6 +136,16 @@ onMounted(async () => {
   } catch (error) {
     console.error("数据库初始化失败", error);
   }
+  unlistenReminderAction = await listen<{
+    action: "dismiss" | "snooze";
+    taskId: number;
+    scheduledAt: string;
+  }>("external-reminder-action", async (event) => {
+    const task = store.tasks.find((item) => item.id === event.payload.taskId);
+    if (!task) return;
+    if (event.payload.action === "dismiss") await dismissReminder(task, event.payload.scheduledAt);
+    else snoozeReminder(task, event.payload.scheduledAt);
+  });
   checkReminders();
   reminderTimer = window.setInterval(checkReminders, 15000);
 });
@@ -122,6 +156,7 @@ function preventContextMenu(event: MouseEvent) {
 
 onUnmounted(() => {
   if (reminderTimer) window.clearInterval(reminderTimer);
+  unlistenReminderAction?.();
   document.removeEventListener("contextmenu", preventContextMenu);
 });
 </script>
@@ -221,12 +256,7 @@ onUnmounted(() => {
         <ProjectsView v-else-if="store.view === 'projects'" />
         <ProjectDetailView v-else-if="store.view === 'project-detail'" />
         <ArchiveView v-else-if="store.view === 'archive'" />
-        <section v-else class="theme-surface-2 grid min-h-80 place-items-center rounded-2xl text-center">
-          <div>
-            <h2 class="text-base font-medium">设置</h2>
-            <p class="mt-1 text-[13px] text-[var(--app-muted)]">设置页将在后续版本补充</p>
-          </div>
-        </section>
+        <SettingsView v-else-if="store.view === 'settings'" />
       </div>
     </main>
 
