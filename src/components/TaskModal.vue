@@ -170,10 +170,16 @@ async function remove() {
         <div class="grid grid-cols-2 gap-3">
           <label class="flex items-center justify-between rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-2)] px-3 py-2.5">
             <span class="text-[13px] font-medium">具体到时间点</span>
-            <input v-model="form.has_time" type="checkbox" class="peer sr-only" />
+            <input v-model="form.has_time" type="checkbox" class="sr-only" />
             <span class="relative inline-flex h-5 w-9 flex-none cursor-pointer items-center">
-              <span class="absolute inset-0 rounded-full bg-[var(--app-panel-3)] transition peer-checked:bg-[var(--app-primary)]"></span>
-              <span class="absolute left-0.5 h-4 w-4 rounded-full bg-white shadow transition peer-checked:translate-x-4"></span>
+              <span
+                class="absolute inset-0 rounded-full transition"
+                :class="form.has_time ? 'bg-[var(--app-primary)]' : 'bg-[var(--app-panel-3)]'"
+              ></span>
+              <span
+                class="absolute left-0.5 h-4 w-4 rounded-full bg-white shadow transition"
+                :class="form.has_time ? 'translate-x-4' : ''"
+              ></span>
             </span>
           </label>
           <label v-if="form.has_time" class="flex flex-col gap-1.5">
