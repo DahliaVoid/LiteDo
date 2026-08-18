@@ -44,7 +44,7 @@ onUnmounted(() => unlisten?.());
 
 <template>
   <main class="h-full p-3">
-    <div v-if="reminder" class="theme-surface flex h-full items-start gap-3 rounded-2xl p-3.5 shadow-2xl">
+    <div v-if="reminder" class="theme-surface flex h-full items-start gap-3 rounded-2xl p-3.5">
       <span class="grid h-9 w-9 flex-none place-items-center rounded-xl bg-[var(--app-primary-soft)] text-[var(--app-primary)]">
         <BellRing :size="17" />
       </span>
